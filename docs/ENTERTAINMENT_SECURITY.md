@@ -77,3 +77,8 @@ vendor. For a motion-design vendor using this tool:
 - [SECURITY_REDTEAM.md](SECURITY_REDTEAM.md)  
 - [ZSH_HARDENING.md](ZSH_HARDENING.md)  
 - [STOCK_ZSH_BASELINE.md](STOCK_ZSH_BASELINE.md)  
+
+## HTML dashboard CSP
+
+Offline report template enforces `default-src 'none'` and `connect-src 'none'` via meta CSP.
+Inline script/style only (no third-party hosts). See SECURITY_REDTEAM.md §10.
