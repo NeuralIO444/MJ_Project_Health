@@ -47,3 +47,13 @@ If `ingest.data` field names differ from the script’s expectations on a newer 
 - [ ] Status BLOCKERS when missing footage or lint errors > 0
 - [ ] Status WARNINGS when only lint warnings or unlinked footage
 - [ ] Lint section shows severity + code + message from `findings[]`
+
+## Shell security regressions (red team)
+
+- [ ] `grep -nE 'eval |sudo |curl |wget |rm -' tools/*.zsh` returns nothing
+- [ ] `/bin/zsh -n tools/mj-observe.zsh` and `mj-snapshot.zsh` succeed
+- [ ] Snapshot does not change source file size
+- [ ] Snapshot second run on same bytes prints SKIP
+- [ ] Snapshot rejects non-.aep/.c4d
+- [ ] Report writes only under `--out`
+- See docs/SECURITY_REDTEAM.md
