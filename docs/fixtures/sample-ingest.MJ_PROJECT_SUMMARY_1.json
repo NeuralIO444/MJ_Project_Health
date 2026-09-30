@@ -1,0 +1,24 @@
+{
+  "schema": "MJ_PROJECT_SUMMARY_1",
+  "projectPath": "/Users/demo/Projects/Sample.aep",
+  "projectName": "Sample.aep",
+  "scrapedAt": "2026-09-29T20:00:00",
+  "aeVersion": "25.1.0",
+  "numComps": 3,
+  "numLayers": 24,
+  "numExpressions": 8,
+  "numEffects": 5,
+  "numFonts": 2,
+  "fonts": ["Helvetica", "Myriad Pro"],
+  "numFootage": 10,
+  "footageMissing": ["Logo_Master.mov"],
+  "footageUnlinked": ["Placeholder"],
+  "layerTypes": {
+    "AVLayer": 18,
+    "TextLayer": 4,
+    "NullLayer": 2
+  },
+  "compsTruncated": false,
+  "footageTruncated": false,
+  "sourceUnchanged": true
+}

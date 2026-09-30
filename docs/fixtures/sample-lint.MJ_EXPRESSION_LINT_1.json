@@ -1,0 +1,29 @@
+{
+  "schema": "MJ_EXPRESSION_LINT_1",
+  "numExpressions": 8,
+  "numFindings": 2,
+  "errors": 1,
+  "warnings": 1,
+  "info": 0,
+  "findings": [
+    {
+      "code": "E001",
+      "severity": "error",
+      "comp": "Main",
+      "layer": "Title",
+      "propertyPath": "Transform/Position",
+      "message": "Expression references layer \"MissingCtrl\", which does not exist in comp \"Main\"."
+    },
+    {
+      "code": "W001",
+      "severity": "warning",
+      "comp": "Main",
+      "layer": "Glow",
+      "propertyPath": "Effects/Glow/Glow Threshold",
+      "message": "sampleImage() inside a loop is a known render-time performance trap."
+    }
+  ],
+  "findingsTruncated": false,
+  "rules": ["E001", "E002", "W001", "W002", "W003", "I001"],
+  "sourceUnchanged": true
+}
