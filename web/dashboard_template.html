@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MJ Shot Health</title>
+<style>
+  :root {
+    --bg: #0f1218;
+    --panel: #1a2030;
+    --border: #2a3348;
+    --text: #e8ecf4;
+    --muted: #9aa3b5;
+    --pass: #3dd68c;
+    --warn: #f5c542;
+    --block: #f07178;
+    --accent: #7aa2ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.45;
+  }
+  header {
+    padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
+  }
+  header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: 0.02em; }
+  header .meta { color: var(--muted); font-size: 0.85rem; }
+  .badge {
+    display: inline-block; padding: 0.35rem 0.75rem; border-radius: 999px;
+    font-weight: 700; font-size: 0.8rem; letter-spacing: 0.04em;
+  }
+  .badge.PASS { background: color-mix(in srgb, var(--pass) 25%, transparent); color: var(--pass); }
+  .badge.WARNINGS { background: color-mix(in srgb, var(--warn) 25%, transparent); color: var(--warn); }
+  .badge.BLOCKERS { background: color-mix(in srgb, var(--block) 25%, transparent); color: var(--block); }
+  main { padding: 1.25rem 1.5rem 2.5rem; max-width: 1100px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem 1.1rem;
+  }
+  .card h2 { margin: 0 0 0.75rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .stat { font-size: 1.75rem; font-weight: 700; }
+  .stat small { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+  ul.list { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+  ul.list li { margin: 0.25rem 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .sev-error { color: var(--block); }
+  .sev-warning { color: var(--warn); }
+  .sev-info { color: var(--accent); }
+  footer { padding: 1rem 1.5rem; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>MographJailed · Shot Health</h1>
+    <div class="meta" id="meta-line">Generated offline · stock HTML dashboard</div>
+  </div>
+  <span class="badge PASS" id="status-badge">PASS</span>
+</header>
+<main>
+  <section class="grid" style="margin-bottom: 1.25rem;">
+    <div class="card"><h2>Project</h2><div class="stat" id="project-name">—</div></div>
+    <div class="card"><h2>Comps / Layers</h2><div class="stat"><span id="num-comps">—</span> <small>/ <span id="num-layers">—</span></small></div></div>
+    <div class="card"><h2>Expressions</h2><div class="stat" id="num-expressions">—</div></div>
+    <div class="card"><h2>Missing footage</h2><div class="stat" id="num-missing">—</div></div>
+  </section>
+
+  <section class="grid" style="margin-bottom: 1.25rem;">
+    <div class="card">
+      <h2>Lint</h2>
+      <p style="margin:0;color:var(--muted)"><span id="lint-errors">0</span> errors · <span id="lint-warnings">0</span> warnings · <span id="lint-info">0</span> info</p>
+    </div>
+    <div class="card">
+      <h2>Fonts / Effects footprint</h2>
+      <p style="margin:0;color:var(--muted)" id="footprint-line">—</p>
+    </div>
+    <div class="card">
+      <h2>Storage</h2>
+      <p style="margin:0;color:var(--muted)" id="storage-line">Not probed</p>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom: 1.25rem;">
+    <h2>Expression risk map</h2>
+    <table>
+      <thead><tr><th>Sev</th><th>Code</th><th>Comp / Layer</th><th>Message</th></tr></thead>
+      <tbody id="risk-body">
+        <tr><td colspan="4" style="color:var(--muted)">No findings loaded</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" style="margin-bottom: 1.25rem;">
+    <h2>Missing assets / footage</h2>
+    <ul class="list" id="missing-list"><li>None reported</li></ul>
+  </section>
+
+  <section class="card">
+    <h2>Capabilities (this machine)</h2>
+    <ul class="list" id="caps-list"><li>Run <code>mj-observe describe</code></li></ul>
+  </section>
+</main>
+<footer>
+  Observer only · no source mutation · stock Sequoia baseline · MJ Project Health
+</footer>
+<script>
+/* Placeholder payload — replaced or overridden by mj-observe report builder */
+window.MJ_DASHBOARD = {
+  status: "PASS",
+  generatedAt: "",
+  projectName: "Sample.aep",
+  numComps: 3,
+  numLayers: 24,
+  numExpressions: 8,
+  numMissing: 1,
+  lint: { errors: 1, warnings: 1, info: 0 },
+  footprint: { fonts: 2, effects: 5 },
+  storage: "",
+  findings: [],
+  missing: ["Logo_Master.mov"],
+  capabilities: []
+};
+(function render(d) {
+  document.getElementById("status-badge").textContent = d.status || "—";
+  document.getElementById("status-badge").className = "badge " + (d.status || "PASS");
+  document.getElementById("meta-line").textContent = (d.generatedAt ? d.generatedAt + " · " : "") + "offline HTML dashboard";
+  document.getElementById("project-name").textContent = d.projectName || "—";
+  document.getElementById("num-comps").textContent = d.numComps != null ? d.numComps : "—";
+  document.getElementById("num-layers").textContent = d.numLayers != null ? d.numLayers : "—";
+  document.getElementById("num-expressions").textContent = d.numExpressions != null ? d.numExpressions : "—";
+  document.getElementById("num-missing").textContent = d.numMissing != null ? d.numMissing : "—";
+  if (d.lint) {
+    document.getElementById("lint-errors").textContent = d.lint.errors || 0;
+    document.getElementById("lint-warnings").textContent = d.lint.warnings || 0;
+    document.getElementById("lint-info").textContent = d.lint.info || 0;
+  }
+  if (d.footprint) {
+    document.getElementById("footprint-line").textContent =
+      (d.footprint.fonts != null ? d.footprint.fonts + " fonts" : "—") +
+      " · " +
+      (d.footprint.effects != null ? d.footprint.effects + " effects" : "—");
+  }
+  if (d.storage) document.getElementById("storage-line").textContent = d.storage;
+  var body = document.getElementById("risk-body");
+  if (d.findings && d.findings.length) {
+    body.innerHTML = d.findings.map(function (f) {
+      var sev = (f.severity || "info").toLowerCase();
+      return "<tr><td class=\"sev-" + sev + "\">" + (f.severity || "") +
+        "</td><td><code>" + (f.code || "") + "</code></td><td>" +
+        (f.comp || "") + " / " + (f.layer || "") + "</td><td>" +
+        (f.message || "") + "</td></tr>";
+    }).join("");
+  }
+  var ml = document.getElementById("missing-list");
+  if (d.missing && d.missing.length) {
+    ml.innerHTML = d.missing.map(function (m) { return "<li>" + m + "</li>"; }).join("");
+  }
+  var cl = document.getElementById("caps-list");
+  if (d.capabilities && d.capabilities.length) {
+    cl.innerHTML = d.capabilities.map(function (c) { return "<li>" + c + "</li>"; }).join("");
+  }
+})(window.MJ_DASHBOARD);
+</script>
+</body>
+</html>
