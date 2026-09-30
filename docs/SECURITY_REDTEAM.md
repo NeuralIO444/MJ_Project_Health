@@ -237,3 +237,18 @@ If any of these become false, treat as a **security regression**:
 | F5 | Mitigated | Fail-closed `/bin` and `/usr/bin` adapters only |
 
 Industry mapping: [ENTERTAINMENT_SECURITY.md](ENTERTAINMENT_SECURITY.md).
+
+## 10. HTML CSP (dashboard)
+
+`web/dashboard_template.html` ships with:
+
+```
+Content-Security-Policy: default-src 'none'; base-uri 'none'; form-action 'none';
+  frame-ancestors 'none'; object-src 'none'; img-src 'none'; font-src 'none';
+  connect-src 'none'; media-src 'none'; worker-src 'none'; manifest-src 'none';
+  style-src 'unsafe-inline'; script-src 'unsafe-inline'
+```
+
+- **No network** (`connect-src 'none'`).
+- Inline style/script required for single-file offline report.
+- Keep using `json.dumps` for the dashboard payload.
