@@ -1,6 +1,6 @@
 # mj-snapshot(1) — non-overwrite project snapshot
 
-**Version:** 0.2.0-dev  
+**Version:** 0.2.2-dev  
 **Baseline:** stock macOS `/bin/zsh`
 
 ```

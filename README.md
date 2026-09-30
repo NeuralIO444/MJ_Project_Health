@@ -1,167 +1,134 @@
 # MJ Project Health
 
-**Tier 0 Observer tool for After Effects 2024+ on limited / locked-down macOS.**
+**Tier 0 Observer for After Effects + Cinema 4D on limited macOS Sequoia.**
 
-One simple script that answers:
+Answers:
 
-> Is this project safe to work on, hand off, or render?
+> Is this shot safe to work on, hand off, or render?
 
-Read-only. Zero install beyond MographJailed. No sudo, no Homebrew, no Python/Node/FFmpeg. Source media and the `.aep` are never modified.
+Read-only. Stock `/bin/zsh`. No sudo, no Homebrew required at runtime. Source `.aep` / `.c4d` are never modified.
 
----
-
-## What it does
-
-1. Runs the official **MographJailed Project Scraper** (read-only ES3 traversal of the open project).
-2. Calls `project.ingest` to validate the scrape receipt and summarize comps / layers / expressions / fonts / footage / missing items.
-3. Calls `expression.lint` for static analysis of scraped expressions (broken refs, dangerous patterns, etc.).
-4. Shows a plain-text health report in an alert.
-
-**Status levels**
-
-| Status    | Meaning                                      |
-|-----------|----------------------------------------------|
-| PASS      | No missing footage, no lint findings         |
-| WARNINGS  | Expression issues found                      |
-| BLOCKERS  | Missing / unlinked footage                   |
-
-Optimized for typical **100–400 MB** `.aep` projects (scraper bounds already fit this range).
+**Repo:** https://github.com/NeuralIO444/MJ_Project_Health  
+**Upstream protocol:** [MographJailed](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI)  
+**CLI version:** 0.2.2-dev
 
 ---
 
+## Status levels
 
-## CLI (mj-observe)
+| Status | Meaning |
+|--------|---------|
+| **PASS** | No missing AE footage / C4D assets; no lint errors |
+| **WARNINGS** | Lint warnings and/or unlinked AE footage |
+| **BLOCKERS** | Missing assets/footage and/or lint errors |
 
-Stock zsh entry point (AE + C4D receipts, offline HTML dashboard, snapshots).
+---
+
+## Quick start
 
 ```zsh
+git clone https://github.com/NeuralIO444/MJ_Project_Health.git
+cd MJ_Project_Health
 chmod +x tools/mj-observe.zsh tools/mj-snapshot.zsh
-./tools/mj-observe.zsh help
-./tools/mj-observe.zsh describe
-./tools/mj-observe.zsh report \
+
+# Prefer a clean shell (no user rc)
+/bin/zsh -f tools/mj-observe.zsh help
+/bin/zsh -f tools/mj-observe.zsh describe
+
+# Offline HTML dashboard from fixtures (AE + C4D)
+/bin/zsh -f tools/mj-observe.zsh report \
   --ingest docs/fixtures/sample-ingest.MJ_PROJECT_SUMMARY_1.json \
-  --lint docs/fixtures/sample-lint.MJ_EXPRESSION_LINT_1.json \
-  --c4d docs/fixtures/sample-c4d.MJ_C4D_SCRAPE_1.json \
-  --out /tmp/mj-out
-open /tmp/mj-out/mj-health-report.html
-./tools/mj-observe.zsh snapshot /path/to/shot.aep
+  --lint   docs/fixtures/sample-lint.MJ_EXPRESSION_LINT_1.json \
+  --c4d    docs/fixtures/sample-c4d.MJ_C4D_SCRAPE_1.json \
+  --out    /tmp/mj-out \
+  --jail   /tmp/mj-out
+open /tmp/mj-out/mj-health-report*.html
 ```
 
-Full manuals:
+### After Effects (host scrape)
 
-- [docs/man/mj-observe.1.md](docs/man/mj-observe.1.md)
-- [docs/man/mj-snapshot.1.md](docs/man/mj-snapshot.1.md)
+1. Install [MographJailed](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI).  
+2. Place `ae/MJ_Project_Health.jsx` next to upstream `MographJailed_ProjectScraper.jsx` + `MographJailed_Client.jsxinc`.  
+3. AE 2024+ → **File > Scripts > Run Script File…**
+
+### Cinema 4D (host scrape)
+
+```zsh
+c4dpy integrations/cinema4d/scene_health.py /abs/shot.c4d /abs/shot/mj-receipts
+```
+
+### Shot orchestration
+
+```zsh
+/bin/zsh -f tools/mj-observe.zsh shot /Shows/Title/SH010
+# discovers .aep/.c4d, describes machine, reports from mj-receipts/ (jailed under shot)
+```
+
+### Snapshot (non-overwrite)
+
+```zsh
+/bin/zsh -f tools/mj-snapshot.zsh /Shows/Title/SH010/SH010.aep
+/bin/zsh -f tools/mj-observe.zsh snapshot /Shows/Title/SH010/SH010.c4d --out /Shows/Title/SH010/mj-versions
+```
+
+---
+
+## Security (studio-oriented)
+
+| Control | Implementation |
+|---------|----------------|
+| No source mutation | Snapshot copies only; refuse existing dest |
+| No network in CLI | No curl/wget; HTML CSP `connect-src 'none'` |
+| Path jail | `--jail DIR`; `shot` / default `pack` jail to shot dir |
+| Fail-closed adapters | Absolute `/bin` + `/usr/bin` only |
+| Non-clobber reports | Unique `mj-health-report-TIMESTAMP-PID.html` unless `--force` |
+| Red-team notes | [docs/SECURITY_REDTEAM.md](docs/SECURITY_REDTEAM.md) |
+| MPAA/TPN-style map | [docs/ENTERTAINMENT_SECURITY.md](docs/ENTERTAINMENT_SECURITY.md) |
+
+```zsh
+# Report must stay under show volume
+mj-observe report --ingest sum.json --out /Shows/X/SH010/out --jail /Shows/X/SH010
+```
+
+---
+
+## Documentation map
+
+| Doc | Topic |
+|------|--------|
+| [docs/man/mj-observe.1.md](docs/man/mj-observe.1.md) | Full CLI manual |
+| [docs/man/mj-snapshot.1.md](docs/man/mj-snapshot.1.md) | Snapshot manual |
+| [docs/wiki/Home.md](docs/wiki/Home.md) | Wiki-style index |
+| [docs/RESPONSE_SHAPES.md](docs/RESPONSE_SHAPES.md) | AE ingest/lint fields |
+| [docs/MJ_C4D_SCRAPE_1.md](docs/MJ_C4D_SCRAPE_1.md) | C4D scrape schema |
+| [docs/STOCK_ZSH_BASELINE.md](docs/STOCK_ZSH_BASELINE.md) | Ship stock Sequoia |
+| [docs/ZSH_HARDENING.md](docs/ZSH_HARDENING.md) | Shell hardening |
+| [docs/AE_C4D_INTEGRATION.md](docs/AE_C4D_INTEGRATION.md) | Cineware / dual-host |
+| [docs/TEST_CHECKLIST.md](docs/TEST_CHECKLIST.md) | QA + security greps |
+
+---
+
+## Layout
+
+```text
+ae/                    MJ_Project_Health.jsx
+tools/                 mj-observe.zsh  mj-snapshot.zsh
+web/                   dashboard_template.html (CSP)
+integrations/cinema4d/ scene_health.py (c4dpy)
+docs/                  design, security, man, wiki, fixtures
+```
+
+---
 
 ## Requirements
 
-- macOS with stock `/bin/zsh` (no admin rights needed)
-- After Effects **2024 or newer**
-- [MographJailed](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI) installed via the designer one-liner
-
----
-
-## Install
-
-### 1. Install MographJailed (once)
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/NeuralIO444/Mograph_Jailed_OSX_CLI/main/tools/install-designer.zsh | zsh
-```
-
-Default location: `~/Documents/MographJailed`  
-Runtime: `~/Documents/MographJailed/dist/mograph-jailed.zsh`
-
-### 2. Get the AE scripts
-
-Place these three files in the **same folder** (recommended: `~/Documents/MographJailed/ae/`):
-
-| File | Source |
-|------|--------|
-| `MographJailed_ProjectScraper.jsx` | [upstream](https://raw.githubusercontent.com/NeuralIO444/Mograph_Jailed_OSX_CLI/main/integrations/after-effects/MographJailed_ProjectScraper.jsx) |
-| `MographJailed_Client.jsxinc` | [upstream](https://raw.githubusercontent.com/NeuralIO444/Mograph_Jailed_OSX_CLI/main/integrations/after-effects/MographJailed_Client.jsxinc) |
-| `MJ_Project_Health.jsx` | this repo (`ae/MJ_Project_Health.jsx`) |
-
-Quick fetch of the two upstream files:
-
-```sh
-mkdir -p ~/Documents/MographJailed/ae
-cd ~/Documents/MographJailed/ae
-curl -fsSL -O https://raw.githubusercontent.com/NeuralIO444/Mograph_Jailed_OSX_CLI/main/integrations/after-effects/MographJailed_ProjectScraper.jsx
-curl -fsSL -O https://raw.githubusercontent.com/NeuralIO444/Mograph_Jailed_OSX_CLI/main/integrations/after-effects/MographJailed_Client.jsxinc
-# then copy MJ_Project_Health.jsx into the same folder
-```
-
-If your MographJailed install path differs, edit `CLI_PATH` at the top of `MJ_Project_Health.jsx`.
-
----
-
-## Usage
-
-1. Open a project in After Effects 2024+.
-2. **File → Scripts → Run Script File…**
-3. Choose `MJ_Project_Health.jsx`.
-4. When the scraper prompts, pick a receipts folder (e.g. `~/Documents/AE_Receipts`).
-5. When asked, select the `.scrape.json` that was just written.
-6. Read the health report.
-
-Typical runtime on a 100–400 MB project: a few seconds to ~30 s (scraper dominates).
-
----
-
-## Safety guarantees
-
-- Scraper is strictly read-only (CI guard in upstream rejects any AE DOM mutation).
-- Only writes: the user-chosen scrape JSON + temporary protocol request files (deleted immediately).
-- No source media mutation.
-- No project save / close / undo group.
-- Network / unknown volumes fail closed inside MographJailed Standard Library.
-- Protocol v1 allowlisted commands only (`project.ingest`, `expression.lint`).
-
-See upstream [SECURITY.md](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI/blob/main/SECURITY.md) and [TIER0_OBSERVER.md](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI/blob/main/docs/TIER0_OBSERVER.md).
-
----
-
-## Project size notes (100–400 MB)
-
-Upstream scraper bounds (already appropriate):
-
-- Max 200 comps
-- Max 500 layers per comp
-- Max 2000 footage items
-- Expressions truncated at 2000 characters
-- Total JSON kept under ~5 MB
-
-If a project hits a cap you will see `compsTruncated` / `footageTruncated` in the report. Do not raise the limits for normal work in this size range.
-
----
-
-## Ranked roadmap (highest return first)
-
-Derived from the design discussion for limited-macOS AE expansion:
-
-| Rank | Tool | Return | Status |
-|------|------|--------|--------|
-| 1 | **Project Health / Observer** | Highest — missing footage + expression bugs before render/hand-off | **This package** |
-| 2 | Expression Linter (standalone depth) | High — catches render-time only failures | Included via `expression.lint` |
-| 3 | Non-destructive Auto-Snapshot | High — version chaos prevention | Upstream `project.snapshot` + optional watcher |
-| 4 | Missing footage / font / plugin audit pack | High | Partial (footage + fonts here; plugin.audit upstream) |
-| 5 | Asset Manifest + Verify | Medium-High | Upstream 0.2 line |
-| 6 | Storage Preflight | Medium | Upstream |
-| 7+ | Media timing, frame extract, image compare, NativeDB indexes | Later | Gated / roadmap |
-
----
-
-## Related upstream docs
-
-- [MographJailed README](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI)
-- [PROTOCOL.md](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI/blob/main/PROTOCOL.md)
-- [MJ_PROJECT_SCRAPE_1 schema](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI/blob/main/docs/MJ_PROJECT_SCRAPE_1.md)
-- [ARCHITECTURE.md](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI/blob/main/ARCHITECTURE.md)
-- [ROADMAP.md](https://github.com/NeuralIO444/Mograph_Jailed_OSX_CLI/blob/main/ROADMAP.md)
+- macOS (Sequoia baseline) with stock `/bin/zsh`
+- Optional: AE 2024+ and MographJailed for AE host path  
+- Optional: Cinema 4D + `c4dpy` for C4D host path  
+- `/usr/bin/python3` for HTML report injection  
 
 ---
 
 ## License
 
-MIT (aligned with upstream MographJailed).  
-The Project Health script is a thin consumer of the upstream protocol and scraper; keep upstream files in sync when upgrading MographJailed.
+MIT — see [LICENSE](LICENSE).

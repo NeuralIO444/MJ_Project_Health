@@ -1,6 +1,6 @@
 # mj-observe(1) — MographJailed Observer CLI
 
-**Version:** 0.2.0-dev  
+**Version:** 0.2.2-dev  
 **Baseline:** stock macOS Sequoia `/bin/zsh` + `/usr/bin` (no Homebrew)
 
 ```
@@ -16,7 +16,7 @@ Read-only project health for After Effects and Cinema 4D. Builds offline HTML re
 ```
 mj-observe help
 mj-observe describe [--json]
-mj-observe report [--ingest FILE] [--lint FILE] [--c4d FILE] [--out DIR]
+mj-observe report [--ingest FILE] [--lint FILE] [--c4d FILE] [--out DIR] [--jail DIR] [--force]
 mj-observe diff OLD.json NEW.json
 mj-observe pack SHOT_DIR [--out DIR]
 mj-observe shot SHOT_DIR
@@ -44,7 +44,7 @@ Status vocabulary:
 | **WARNINGS** | Lint warnings and/or unlinked AE footage |
 | **BLOCKERS** | Missing footage/assets and/or lint errors |
 
-Dashboard output is a single **offline HTML** file (no Electron, no server). Open with stock `open`.
+Dashboard output is a single **offline HTML** file (no Electron, no server). Template ships **Content-Security-Policy** (`default-src 'none'; `connect-src 'none'`). Open with stock `open`.
 
 ---
 
@@ -66,7 +66,20 @@ Probe this machine:
 
 ### report
 
-Build `mj-health-report.html` + `HEALTH.txt` from receipt JSON.
+Build offline HTML dashboard + HEALTH text from receipt JSON.
+
+| Option | Meaning |
+|--------|---------|
+| `--ingest` | AE `MJ_PROJECT_SUMMARY_1` |
+| `--lint` | AE `MJ_EXPRESSION_LINT_1` |
+| `--c4d` | `MJ_C4D_SCRAPE_1` |
+| `--out DIR` | Output directory |
+| `--jail DIR` | Require `--out` under this root (studio path control) |
+| `--force` | Allow overwrite of fixed report names |
+
+Without `--force`, report files are named with timestamp and pid to avoid clobber.
+`shot` always passes `--jail <shot-dir>`.
+
 
 | Option | File schema |
 |--------|-------------|
