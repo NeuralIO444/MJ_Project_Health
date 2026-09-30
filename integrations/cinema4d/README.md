@@ -1,37 +1,39 @@
 # Cinema 4D integration (Observer)
 
-Skeleton for the C4D host side of MographJailed-style dual-host health.
-
 | Piece | Status |
 |-------|--------|
-| Schema draft | See [docs/AE_C4D_INTEGRATION.md](../../docs/AE_C4D_INTEGRATION.md) §9 |
-| `c4dpy` scraper | Planned — `scene_health.py` (not shipped yet) |
-| Native `c4d.ingest` | Upstream Protocol territory |
-| Consumer report | Parallel to `ae/MJ_Project_Health.jsx` |
+| Schema | [docs/MJ_C4D_SCRAPE_1.md](../../docs/MJ_C4D_SCRAPE_1.md) |
+| Scraper | `scene_health.py` — run under **c4dpy** only |
+| Fixture | [docs/fixtures/sample-c4d.MJ_C4D_SCRAPE_1.json](../../docs/fixtures/sample-c4d.MJ_C4D_SCRAPE_1.json) |
+| Native `c4d.ingest` | Upstream Protocol territory (optional) |
+| Consumer | `mj-observe` aggregates receipts; HTML dashboard AE-first for now |
 
 ## Requirements (target Mac)
 
-- Maxon Cinema 4D installed (full app; Lite alone is insufficient for full `c4dpy` production use)
+- Maxon Cinema 4D installed
 - Valid license for headless `c4dpy`
-- Typical binary path:
+- Typical binary:
 
 ```text
 /Applications/Maxon Cinema 4D <version>/c4dpy.app/Contents/MacOS/c4dpy
 ```
 
-## Intended scrape flow
+## Scrape (read-only)
 
-```text
-c4dpy scene_health.py /absolute/path/to/shot.c4d
-  → writes MJ_C4D_SCRAPE_1.json (user-chosen or default receipts dir)
-  → no project save, no asset mutation
+```zsh
+C4DPY="/Applications/Maxon Cinema 4D 2025/c4dpy.app/Contents/MacOS/c4dpy"
+"$C4DPY" /path/to/this/repo/integrations/cinema4d/scene_health.py \
+  /absolute/path/to/shot.c4d \
+  /absolute/path/to/shot/mj-receipts
 ```
+
+Writes `shot.MJ_C4D_SCRAPE_1.json`. Does not save the project.
 
 ## Safety
 
 - Read-only Observer only  
 - `allowDialogs=False` on asset enumeration  
-- Fail closed if `c4dpy` missing or license blocks headless run  
+- Fail closed if not running under c4dpy  
 - Never overwrite source `.c4d` or textures  
 
-Full product integration (Cineware, multipass, Live Link) remains Adobe/Maxon — see AE_C4D_INTEGRATION.md.
+Product integration (Cineware, multipass) remains Adobe/Maxon — see `docs/AE_C4D_INTEGRATION.md`.

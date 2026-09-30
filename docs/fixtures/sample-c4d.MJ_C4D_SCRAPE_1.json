@@ -1,0 +1,29 @@
+{
+  "schema": "MJ_C4D_SCRAPE_1",
+  "scraperVersion": "0.1.0",
+  "projectPath": "/Users/demo/Shots/SH010/SH010_main.c4d",
+  "projectName": "SH010_main.c4d",
+  "scrapedAt": "2026-09-30T00:00:00",
+  "c4dVersion": "2025.0.0",
+  "assets": [
+    {
+      "name": "hero_diff.png",
+      "path": "/Users/demo/Shots/SH010/tex/hero_diff.png",
+      "exists": true,
+      "kind": "texture",
+      "sizeBytes": 2048000
+    },
+    {
+      "name": "env.hdr",
+      "path": "/Users/demo/Library/Caches/missing_env.hdr",
+      "exists": false,
+      "kind": "hdr",
+      "sizeBytes": null
+    }
+  ],
+  "assetsMissing": ["env.hdr"],
+  "numAssets": 2,
+  "numMissing": 1,
+  "assetsTruncated": false,
+  "sourceUnchanged": true
+}
