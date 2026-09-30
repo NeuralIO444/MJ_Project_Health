@@ -2,13 +2,13 @@
 # mj-observe — unified Observer CLI (stock zsh baseline)
 # Production: /bin/zsh + /usr/bin only. No Homebrew required.
 #
-# Commands: help | describe | report | diff | pack | shot
+# Commands: help | describe | report | diff | pack | shot | snapshot
 
 emulate -L zsh
 setopt err_return no_unset 2>/dev/null || true
 setopt extended_glob null_glob
 
-MJ_OBSERVE_VERSION="0.1.0-dev"
+MJ_OBSERVE_VERSION="0.2.0-dev"
 SCRIPT_DIR="${0:A:h}"
 ROOT_DIR="${SCRIPT_DIR:h}"
 TEMPLATE="${ROOT_DIR}/web/dashboard_template.html"
@@ -20,12 +20,14 @@ mj-observe ${MJ_OBSERVE_VERSION} — MographJailed Observer (stock zsh)
 Usage:
   mj-observe help
   mj-observe describe [--json]
-  mj-observe report --ingest <file> [--lint <file>] [--out <dir>]
-  mj-observe diff <old-summary.json> <new-summary.json>
+  mj-observe report [--ingest <AE summary>] [--lint <lint>] [--c4d <C4D scrape>] [--out <dir>]
+  mj-observe diff <old.json> <new.json>
   mj-observe pack <shot-dir> [--out <dir>]
-  mj-observe shot <shot-dir>   # Phase 1: discover + describe + report if receipts exist
+  mj-observe shot <shot-dir>
+  mj-observe snapshot <file.aep|file.c4d> [--out <versions-dir>]
 
 Rules: read-only Observer; no source mutation; Sequoia stock baseline.
+AE + C4D receipts supported. Dashboard is offline HTML.
 EOF
 }
 
@@ -79,28 +81,31 @@ cmd_describe() {
   print "---- protocol ----"
   probe_mj_cli
   print "---- note ----"
-  print "AE scrape: run File > Scripts > MJ scraper / Project Health in After Effects."
-  print "C4D scrape: c4dpy scene_health.py /path/to/shot.c4d (when shipped)."
+  print "AE scrape: File > Scripts > MJ Project Health / scraper in After Effects."
+  print "C4D scrape: c4dpy integrations/cinema4d/scene_health.py /path/shot.c4d"
   if (( as_json )); then
-    print "(--json detailed envelope: TODO P1)"
+    print "(--json detailed envelope: TODO)"
   fi
 }
 
-# Build dashboard HTML from fixture-shaped summary objects using python3 if present, else minimal sed note
 cmd_report() {
-  local ingest="" lint="" outdir="."
+  local ingest="" lint="" c4d="" outdir="."
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --ingest) ingest="$2"; shift 2 ;;
       --lint) lint="$2"; shift 2 ;;
+      --c4d) c4d="$2"; shift 2 ;;
       --out) outdir="$2"; shift 2 ;;
       *) print "Unknown arg: $1"; return 1 ;;
     esac
   done
-  if [[ -z "$ingest" || ! -f "$ingest" ]]; then
-    print "report requires --ingest <MJ_PROJECT_SUMMARY_1 json>"
+  if [[ -z "$ingest" && -z "$c4d" ]]; then
+    print "report requires --ingest <AE summary> and/or --c4d <MJ_C4D_SCRAPE_1>"
     return 1
   fi
+  [[ -n "$ingest" && ! -f "$ingest" ]] && { print "missing ingest: $ingest"; return 1; }
+  [[ -n "$c4d" && ! -f "$c4d" ]] && { print "missing c4d: $c4d"; return 1; }
+  [[ -n "$lint" && ! -f "$lint" ]] && { print "missing lint: $lint"; return 1; }
   mkdir -p "$outdir"
   local outfile="${outdir}/mj-health-report.html"
   if [[ ! -f "$TEMPLATE" ]]; then
@@ -109,37 +114,52 @@ cmd_report() {
   fi
 
   if have python3; then
-    INGEST="$ingest" LINT="${lint:-}" TEMPLATE="$TEMPLATE" OUTFILE="$outfile" python3 - <<'PY'
+    INGEST="${ingest:-}" LINT="${lint:-}" C4D="${c4d:-}" TEMPLATE="$TEMPLATE" OUTFILE="$outfile" python3 - <<'PY'
 import json, os, re, datetime
-ingest_path = os.environ["INGEST"]
+ingest_path = os.environ.get("INGEST") or ""
 lint_path = os.environ.get("LINT") or ""
+c4d_path = os.environ.get("C4D") or ""
 template = open(os.environ["TEMPLATE"], encoding="utf-8").read()
-with open(ingest_path, encoding="utf-8") as f:
-    raw = json.load(f)
-# accept either bare data or full envelope
-data = raw.get("data", raw) if isinstance(raw, dict) else {}
-lint = {}
-findings = []
-if lint_path and os.path.isfile(lint_path):
-    with open(lint_path, encoding="utf-8") as f:
-        lraw = json.load(f)
-    lint = lraw.get("data", lraw) if isinstance(lraw, dict) else {}
-    findings = list(lint.get("findings") or [])
-    # risk map: errors, warnings, info
-    order = {"error": 0, "warning": 1, "info": 2}
-    findings.sort(key=lambda x: (order.get(str(x.get("severity","")).lower(), 9), x.get("code","")))
 
-missing = list(data.get("footageMissing") or [])
+def load(path):
+    if not path or not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+    return raw.get("data", raw) if isinstance(raw, dict) else {}
+
+data = load(ingest_path)
+lint = load(lint_path)
+c4d = load(c4d_path)
+findings = list(lint.get("findings") or [])
+order = {"error": 0, "warning": 1, "info": 2}
+findings.sort(key=lambda x: (order.get(str(x.get("severity", "")).lower(), 9), x.get("code", "")))
+
+missing_ae = list(data.get("footageMissing") or [])
+missing_c4d = list(c4d.get("assetsMissing") or [])
+missing = list(missing_ae)
+for m in missing_c4d:
+    if m not in missing:
+        missing.append(m)
+
 status = "PASS"
-if missing or int(lint.get("errors") or 0) > 0:
+if missing or int(lint.get("errors") or 0) > 0 or int(c4d.get("numMissing") or 0) > 0:
     status = "BLOCKERS"
 elif int(lint.get("warnings") or 0) > 0 or list(data.get("footageUnlinked") or []):
     status = "WARNINGS"
 
+project = (
+    data.get("projectName")
+    or c4d.get("projectName")
+    or data.get("projectPath")
+    or c4d.get("projectPath")
+    or "—"
+)
+
 payload = {
     "status": status,
     "generatedAt": datetime.datetime.now().isoformat(timespec="seconds"),
-    "projectName": data.get("projectName") or data.get("projectPath") or "—",
+    "projectName": project,
     "numComps": data.get("numComps"),
     "numLayers": data.get("numLayers"),
     "numExpressions": data.get("numExpressions"),
@@ -157,9 +177,15 @@ payload = {
     "findings": findings[:50],
     "missing": missing,
     "capabilities": [],
+    "c4d": {
+        "numAssets": c4d.get("numAssets"),
+        "numMissing": c4d.get("numMissing"),
+        "c4dVersion": c4d.get("c4dVersion"),
+    }
+    if c4d
+    else None,
 }
 blob = json.dumps(payload, ensure_ascii=False)
-# replace window.MJ_DASHBOARD = { ... };
 new_js = "window.MJ_DASHBOARD = " + blob + ";"
 out = re.sub(
     r"window\.MJ_DASHBOARD\s*=\s*\{.*?\};",
@@ -171,17 +197,19 @@ out = re.sub(
 open(os.environ["OUTFILE"], "w", encoding="utf-8").write(out)
 print(os.environ["OUTFILE"])
 print("status=" + status)
+if c4d:
+    print("c4d_missing=%s" % c4d.get("numMissing"))
 PY
   else
     cp "$TEMPLATE" "$outfile"
     print "$outfile (template only; python3 needed to inject data)"
   fi
 
-  # HEALTH.txt sidecar
   {
     print "MJ Shot Health"
-    print "ingest=$ingest"
+    [[ -n "$ingest" ]] && print "ingest=$ingest"
     [[ -n "$lint" ]] && print "lint=$lint"
+    [[ -n "$c4d" ]] && print "c4d=$c4d"
     print "report=$outfile"
   } > "${outdir}/HEALTH.txt"
   print "Wrote ${outdir}/HEALTH.txt"
@@ -206,9 +234,9 @@ ma, mb = miss(a), miss(b)
 print("=== MJ health diff ===")
 print("new missing:     ", sorted(mb - ma) or "(none)")
 print("resolved missing:", sorted(ma - mb) or "(none)")
-for key in ("numComps", "numLayers", "numExpressions", "numFonts", "numFootage", "numFindings", "errors", "warnings"):
+for key in ("numComps", "numLayers", "numExpressions", "numFonts", "numFootage", "numAssets", "numMissing", "numFindings", "errors", "warnings"):
     if key in a or key in b:
-        print(f"{key}: {a.get(key)} -> {b.get(key)}")
+        print("%s: %s -> %s" % (key, a.get(key), b.get(key)))
 PY
   else
     print "python3 required for diff on this build"
@@ -236,7 +264,7 @@ cmd_pack() {
   stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null || print unknown)
   local name="${shot:t}"
   local stage="${outdir}/mj-handoff-${name}-${stamp}"
-  mkdir -p "$stage/receipts"
+  mkdir -p "$stage/receipts" "$stage/snapshots"
   {
     print "MJ Hand-off Pack"
     print "shot=$shot"
@@ -246,10 +274,12 @@ cmd_pack() {
     print "----"
     df -h "$shot" 2>/dev/null || true
   } > "$stage/MACHINE.txt"
-  # copy receipts if present
   local r
   for r in "$shot"/mj-receipts/*(N) "$shot"/receipts/*(N); do
     [[ -f "$r" ]] && cp "$r" "$stage/receipts/"
+  done
+  for r in "$shot"/mj-versions/*(N) "$shot"/versions/*(N); do
+    [[ -f "$r" ]] && cp "$r" "$stage/snapshots/"
   done
   [[ -f "$shot/HEALTH.txt" ]] && cp "$shot/HEALTH.txt" "$stage/"
   [[ -f "$shot/mj-health-report.html" ]] && cp "$shot/mj-health-report.html" "$stage/"
@@ -283,22 +313,40 @@ cmd_shot() {
   rec=("$shot"/mj-receipts/*(N) "$shot"/receipts/*(N))
   if (( ${#rec} )); then
     printf '  %s\n' "${rec[@]}"
-    # try report if we find summary-like json
-    local candidate=""
+    local ae_sum="" lint_f="" c4d_f=""
     for r in $rec; do
       if grep -q 'MJ_PROJECT_SUMMARY_1\|numComps' "$r" 2>/dev/null; then
-        candidate="$r"
-        break
+        ae_sum="$r"
+      elif grep -q 'MJ_EXPRESSION_LINT_1\|"findings"' "$r" 2>/dev/null; then
+        lint_f="$r"
+      elif grep -q 'MJ_C4D_SCRAPE_1\|assetsMissing' "$r" 2>/dev/null; then
+        c4d_f="$r"
       fi
     done
-    if [[ -n "$candidate" ]]; then
-      cmd_report --ingest "$candidate" --out "$shot"
+    local report_args=()
+    [[ -n "$ae_sum" ]] && report_args+=(--ingest "$ae_sum")
+    [[ -n "$lint_f" ]] && report_args+=(--lint "$lint_f")
+    [[ -n "$c4d_f" ]] && report_args+=(--c4d "$c4d_f")
+    if (( ${#report_args} )); then
+      cmd_report "${report_args[@]}" --out "$shot"
+    else
+      print "  (receipts present but no known summary schema)"
     fi
   else
-    print "  (none)  Run AE Project Health / C4D scrape, save receipts under mj-receipts/"
+    print "  (none)  Run AE Project Health / c4dpy scene_health.py; save under mj-receipts/"
   fi
   print "-- storage --"
   df -h "$shot" 2>/dev/null || true
+}
+
+cmd_snapshot() {
+  local snap="${ROOT_DIR}/tools/mj-snapshot.zsh"
+  if [[ -x "$snap" || -f "$snap" ]]; then
+    zsh "$snap" "$@"
+  else
+    print "mj-snapshot.zsh not found at $snap"
+    return 1
+  fi
 }
 
 main() {
@@ -311,6 +359,7 @@ main() {
     diff) cmd_diff "$@" ;;
     pack) cmd_pack "$@" ;;
     shot) cmd_shot "$@" ;;
+    snapshot) cmd_snapshot "$@" ;;
     *) print "Unknown command: $cmd"; usage; return 1 ;;
   esac
 }
