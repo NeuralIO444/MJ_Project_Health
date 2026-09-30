@@ -160,6 +160,10 @@ Commands print errors to stdout and return non-zero on hard failures (missing re
 
 ---
 
+## INVOCATION
+
+Prefer `/bin/zsh -f tools/mj-observe.zsh …` so user rc files do not affect PATH or aliases.
+
 ## SAFETY
 
 - Observer only — no project save, no relink, no media rewrite  

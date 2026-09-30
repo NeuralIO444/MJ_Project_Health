@@ -2,13 +2,34 @@
 # mj-observe — unified Observer CLI (stock zsh baseline)
 # Production: /bin/zsh + /usr/bin only. No Homebrew required.
 #
+# Prefer a clean shell (no user rc):
+#   /bin/zsh -f tools/mj-observe.zsh <command> [args]
+#
 # Commands: help | describe | report | diff | pack | shot | snapshot
 
 emulate -L zsh
-setopt err_return no_unset 2>/dev/null || true
-setopt extended_glob null_glob
+setopt err_return extended_glob null_glob warn_create_global
+unsetopt nounset
 
-MJ_OBSERVE_VERSION="0.2.0-dev"
+# --- fixed stock adapters ---------------------------------------------------
+typeset _BIN_CP="/bin/cp"
+typeset _BIN_MKDIR="/bin/mkdir"
+typeset _BIN_DATE="/bin/date"
+typeset _BIN_DF="/bin/df"
+typeset _USR_GREP="/usr/bin/grep"
+typeset _USR_TAR="/usr/bin/tar"
+typeset _USR_SW_VERS="/usr/bin/sw_vers"
+typeset _USR_PYTHON="/usr/bin/python3"
+typeset _USR_OPEN="/usr/bin/open"
+[[ -x /bin/cp ]] || _BIN_CP="cp"
+[[ -x /bin/mkdir ]] || _BIN_MKDIR="mkdir"
+[[ -x /bin/date ]] || _BIN_DATE="date"
+[[ -x /bin/df ]] || _BIN_DF="df"
+[[ -x /usr/bin/python3 ]] || _USR_PYTHON="python3"
+[[ -x /usr/bin/tar ]] || _USR_TAR="tar"
+# ---------------------------------------------------------------------------
+
+MJ_OBSERVE_VERSION="0.2.1-dev"
 SCRIPT_DIR="${0:A:h}"
 ROOT_DIR="${SCRIPT_DIR:h}"
 TEMPLATE="${ROOT_DIR}/web/dashboard_template.html"
@@ -53,11 +74,18 @@ EXAMPLES
 
 RULES
   Read-only Observer. No source mutation. Stock Sequoia baseline (no Homebrew).
+  Prefer: /bin/zsh -f tools/mj-observe.zsh <command> ...
   Full manual: docs/man/mj-observe.1.md
 EOF
 }
 
 have() {
+  # Prefer absolute stock paths when probing known tools
+  case "$1" in
+    python3) [[ -x ${_USR_PYTHON} ]] && return 0 ;;
+    tar)     [[ -x ${_USR_TAR} ]] && return 0 ;;
+    open)    [[ -x ${_USR_OPEN} ]] && return 0 ;;
+  esac
   command -v "$1" >/dev/null 2>&1
 }
 
@@ -122,25 +150,25 @@ cmd_report() {
       --lint) lint="$2"; shift 2 ;;
       --c4d) c4d="$2"; shift 2 ;;
       --out) outdir="$2"; shift 2 ;;
-      *) print "Unknown arg: $1"; return 1 ;;
+      *) print -u2 "Unknown arg: $1"; return 1 ;;
     esac
   done
   if [[ -z "$ingest" && -z "$c4d" ]]; then
-    print "report requires --ingest <AE summary> and/or --c4d <MJ_C4D_SCRAPE_1>"
+    print -u2 "report requires --ingest <AE summary> and/or --c4d <MJ_C4D_SCRAPE_1>"
     return 1
   fi
-  [[ -n "$ingest" && ! -f "$ingest" ]] && { print "missing ingest: $ingest"; return 1; }
-  [[ -n "$c4d" && ! -f "$c4d" ]] && { print "missing c4d: $c4d"; return 1; }
-  [[ -n "$lint" && ! -f "$lint" ]] && { print "missing lint: $lint"; return 1; }
-  mkdir -p "$outdir"
+  [[ -n "$ingest" && ! -f "$ingest" ]] && { print -u2 "missing ingest: $ingest"; return 1; }
+  [[ -n "$c4d" && ! -f "$c4d" ]] && { print -u2 "missing c4d: $c4d"; return 1; }
+  [[ -n "$lint" && ! -f "$lint" ]] && { print -u2 "missing lint: $lint"; return 1; }
+  ${_BIN_MKDIR} -p "$outdir"
   local outfile="${outdir}/mj-health-report.html"
   if [[ ! -f "$TEMPLATE" ]]; then
-    print "Missing template: $TEMPLATE"
+    print -u2 "Missing template: $TEMPLATE"
     return 1
   fi
 
   if have python3; then
-    INGEST="${ingest:-}" LINT="${lint:-}" C4D="${c4d:-}" TEMPLATE="$TEMPLATE" OUTFILE="$outfile" python3 - <<'PY'
+    INGEST="${ingest:-}" LINT="${lint:-}" C4D="${c4d:-}" TEMPLATE="$TEMPLATE" OUTFILE="$outfile" ${_USR_PYTHON} - <<'PY'
 import json, os, re, datetime
 ingest_path = os.environ.get("INGEST") or ""
 lint_path = os.environ.get("LINT") or ""
@@ -244,11 +272,11 @@ PY
 cmd_diff() {
   local old="${1:-}" new="${2:-}"
   if [[ -z "$old" || -z "$new" || ! -f "$old" || ! -f "$new" ]]; then
-    print "usage: mj-observe diff <old-summary.json> <new-summary.json>"
+    print -u2 "usage: mj-observe diff <old-summary.json> <new-summary.json>"
     return 1
   fi
   if have python3; then
-    python3 - "$old" "$new" <<'PY'
+    ${_USR_PYTHON} - "$old" "$new" <<'PY'
 import json, sys
 def load(p):
     o = json.load(open(p, encoding="utf-8"))
@@ -265,7 +293,7 @@ for key in ("numComps", "numLayers", "numExpressions", "numFonts", "numFootage",
         print("%s: %s -> %s" % (key, a.get(key), b.get(key)))
 PY
   else
-    print "python3 required for diff on this build"
+    print -u2 "python3 required for diff on this build"
     return 1
   fi
 }
@@ -281,13 +309,13 @@ cmd_pack() {
     esac
   done
   if [[ -z "$shot" || ! -d "$shot" ]]; then
-    print "usage: mj-observe pack <shot-dir> [--out <dir>]"
+    print -u2 "usage: mj-observe pack <shot-dir> [--out <dir>]"
     return 1
   fi
   outdir="${outdir:-$shot}"
-  mkdir -p "$outdir"
+  ${_BIN_MKDIR} -p "$outdir"
   local stamp
-  stamp=$(date +%Y%m%d-%H%M%S 2>/dev/null || print unknown)
+  stamp="$(${_BIN_DATE} +%Y%m%d-%H%M%S 2>/dev/null)" || stamp="unknown"
   local name="${shot:t}"
   local stage="${outdir}/mj-handoff-${name}-${stamp}"
   mkdir -p "$stage/receipts" "$stage/snapshots"
@@ -296,9 +324,9 @@ cmd_pack() {
     print "shot=$shot"
     print "created=$stamp"
     print "----"
-    sw_vers 2>/dev/null || true
+    ${_USR_SW_VERS} 2>/dev/null || true
     print "----"
-    df -h "$shot" 2>/dev/null || true
+    ${_BIN_DF} -h "$shot" 2>/dev/null || true
   } > "$stage/MACHINE.txt"
   local r
   for r in "$shot"/mj-receipts/*(N) "$shot"/receipts/*(N); do
@@ -311,7 +339,7 @@ cmd_pack() {
   [[ -f "$shot/mj-health-report.html" ]] && cp "$shot/mj-health-report.html" "$stage/"
   if have tar; then
     local tarball="${outdir}/mj-handoff-${name}-${stamp}.tar.gz"
-    tar -czf "$tarball" -C "$outdir" "mj-handoff-${name}-${stamp}"
+    ${_USR_TAR} -czf "$tarball" -C "$outdir" "mj-handoff-${name}-${stamp}"
     print "Wrote $tarball"
   else
     print "Wrote folder $stage (tar not found)"
@@ -321,7 +349,7 @@ cmd_pack() {
 cmd_shot() {
   local shot="${1:-}"
   if [[ -z "$shot" || ! -d "$shot" ]]; then
-    print "usage: mj-observe shot <shot-dir>"
+    print -u2 "usage: mj-observe shot <shot-dir>"
     return 1
   fi
   print "=== mj-observe shot: $shot ==="
@@ -341,11 +369,11 @@ cmd_shot() {
     printf '  %s\n' "${rec[@]}"
     local ae_sum="" lint_f="" c4d_f=""
     for r in $rec; do
-      if grep -q 'MJ_PROJECT_SUMMARY_1\|numComps' "$r" 2>/dev/null; then
+      if ${_USR_GREP} -q 'MJ_PROJECT_SUMMARY_1\|numComps' "$r" 2>/dev/null; then
         ae_sum="$r"
-      elif grep -q 'MJ_EXPRESSION_LINT_1\|"findings"' "$r" 2>/dev/null; then
+      elif ${_USR_GREP} -q 'MJ_EXPRESSION_LINT_1\|"findings"' "$r" 2>/dev/null; then
         lint_f="$r"
-      elif grep -q 'MJ_C4D_SCRAPE_1\|assetsMissing' "$r" 2>/dev/null; then
+      elif ${_USR_GREP} -q 'MJ_C4D_SCRAPE_1\|assetsMissing' "$r" 2>/dev/null; then
         c4d_f="$r"
       fi
     done
@@ -362,15 +390,15 @@ cmd_shot() {
     print "  (none)  Run AE Project Health / c4dpy scene_health.py; save under mj-receipts/"
   fi
   print "-- storage --"
-  df -h "$shot" 2>/dev/null || true
+  ${_BIN_DF} -h "$shot" 2>/dev/null || true
 }
 
 cmd_snapshot() {
   local snap="${ROOT_DIR}/tools/mj-snapshot.zsh"
-  if [[ -x "$snap" || -f "$snap" ]]; then
-    zsh "$snap" "$@"
+  if [[ -f "$snap" ]]; then
+    /bin/zsh -f "$snap" "$@"
   else
-    print "mj-snapshot.zsh not found at $snap"
+    print -u2 "mj-snapshot.zsh not found at $snap"
     return 1
   fi
 }
@@ -386,7 +414,7 @@ main() {
     pack) cmd_pack "$@" ;;
     shot) cmd_shot "$@" ;;
     snapshot) cmd_snapshot "$@" ;;
-    *) print "Unknown command: $cmd"; usage; return 1 ;;
+    *) print -u2 "Unknown command: $cmd"; usage; return 1 ;;
   esac
 }
 
