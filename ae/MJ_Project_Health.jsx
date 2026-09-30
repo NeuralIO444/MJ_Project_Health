@@ -9,6 +9,9 @@
  *   3. Calls project.ingest + expression.lint via MographJailed Protocol v1.
  *   4. Shows a plain-text health report (PASS / WARNINGS / BLOCKERS).
  *
+ * Response fields pinned to upstream MJ_PROJECT_SUMMARY_1 / MJ_EXPRESSION_LINT_1
+ * (see docs/RESPONSE_SHAPES.md). Do not invent alternate key names.
+ *
  * Requirements:
  *   - MographJailed installed (designer one-liner or clone)
  *   - MographJailed_ProjectScraper.jsx and MographJailed_Client.jsxinc
@@ -32,33 +35,60 @@
         alert(title + "\n\n" + body);
     }
 
-    function countMissing(footage) {
-        var n = 0, i;
-        if (!footage || !(footage instanceof Array)) return 0;
-        for (i = 0; i < footage.length; i++) {
-            if (footage[i] && footage[i].missing === true) n++;
-        }
-        return n;
-    }
-
-    function summarizeLint(lintData) {
-        if (!lintData) return "No lint data.";
-        var findings = lintData.findings || lintData.issues || lintData.problems || [];
-        if (!findings || findings.length === 0) return "No expression issues found.";
-        var lines = [], i, f, max = Math.min(findings.length, 12);
-        for (i = 0; i < max; i++) {
-            f = findings[i];
-            if (!f) continue;
-            lines.push("• " + (f.message || f.rule || f.code || String(f).substring(0, 80)));
-        }
-        if (findings.length > max) {
-            lines.push("… +" + (findings.length - max) + " more");
-        }
-        return lines.join("\n");
-    }
-
     function numOr(val, fallback) {
         return (typeof val === "number") ? val : fallback;
+    }
+
+    function arrLen(a) {
+        return (a && a instanceof Array) ? a.length : 0;
+    }
+
+    /** Rank findings: error → warning → info; format top N lines. */
+    function summarizeLint(lintData) {
+        if (!lintData) return "No lint data.";
+        var findings = lintData.findings;
+        if (!findings || !(findings instanceof Array) || findings.length === 0) {
+            return "No expression issues found.";
+        }
+        var errors = numOr(lintData.errors, 0);
+        var warnings = numOr(lintData.warnings, 0);
+        var info = numOr(lintData.info, 0);
+        var head = "Findings: " + numOr(lintData.numFindings, findings.length) +
+            "  (" + errors + " errors, " + warnings + " warnings, " + info + " info)";
+        if (lintData.findingsTruncated) {
+            head += "  [truncated]";
+        }
+
+        var order = { error: 0, warning: 1, info: 2 };
+        var sorted = findings.slice(0);
+        sorted.sort(function (a, b) {
+            var sa = order[String(a && a.severity || "").toLowerCase()];
+            var sb = order[String(b && b.severity || "").toLowerCase()];
+            if (sa === undefined) sa = 9;
+            if (sb === undefined) sb = 9;
+            if (sa !== sb) return sa - sb;
+            var ca = String(a && a.code || "");
+            var cb = String(b && b.code || "");
+            return ca < cb ? -1 : (ca > cb ? 1 : 0);
+        });
+
+        var lines = [head], i, f, max = Math.min(sorted.length, 12);
+        for (i = 0; i < max; i++) {
+            f = sorted[i];
+            if (!f) continue;
+            var sev = String(f.severity || "").toUpperCase();
+            var code = f.code ? String(f.code) : "";
+            var where = "";
+            if (f.comp || f.layer) {
+                where = " [" + (f.comp || "?") + " / " + (f.layer || "?") + "]";
+            }
+            lines.push("• " + sev + (code ? " " + code : "") + where + " — " +
+                (f.message || String(f).substring(0, 80)));
+        }
+        if (sorted.length > max) {
+            lines.push("… +" + (sorted.length - max) + " more");
+        }
+        return lines.join("\n");
     }
 
     try {
@@ -121,24 +151,22 @@
             // best-effort; continue with ingest summary
         }
 
-        // 4) Report
+        // 4) Report — fields from MJ_PROJECT_SUMMARY_1 / MJ_EXPRESSION_LINT_1 only
         var d = ingest.data || {};
-        var missing = 0;
-        if (d.footage) {
-            missing = countMissing(d.footage);
-        } else if (typeof d.missingFootageCount === "number") {
-            missing = d.missingFootageCount;
-        }
+        var missingArr = d.footageMissing;
+        var unlinkedArr = d.footageUnlinked;
+        var missing = arrLen(missingArr);
+        var unlinked = arrLen(unlinkedArr);
 
-        var lintFindings = [];
-        if (lint && lint.ok && lint.data) {
-            lintFindings = lint.data.findings || lint.data.issues || lint.data.problems || [];
-        }
+        var lintData = (lint && lint.ok && lint.data) ? lint.data : null;
+        var lintErrors = lintData ? numOr(lintData.errors, 0) : 0;
+        var lintWarnings = lintData ? numOr(lintData.warnings, 0) : 0;
 
+        // Status: BLOCKERS if missing footage or lint errors; WARNINGS if lint warnings or unlinked
         var status = "PASS";
-        if (missing > 0) {
+        if (missing > 0 || lintErrors > 0) {
             status = "BLOCKERS";
-        } else if (lintFindings.length > 0) {
+        } else if (lintWarnings > 0 || unlinked > 0) {
             status = "WARNINGS";
         }
 
@@ -151,14 +179,29 @@
         var lines = [];
         lines.push("Status: " + status);
         lines.push("Project: " + projectLabel);
+        if (d.aeVersion) lines.push("AE (scrape): " + d.aeVersion);
         lines.push("Receipt: " + receipt.name);
         lines.push("");
-        lines.push("Comps:        " + numOr(d.compCount, d.comps ? d.comps.length : "?"));
-        lines.push("Layers:       " + numOr(d.layerCount, "?"));
-        lines.push("Expressions:  " + numOr(d.expressionCount, "?"));
-        lines.push("Fonts:        " + numOr(d.fontCount, d.fonts ? d.fonts.length : "?"));
-        lines.push("Footage:      " + numOr(d.footageCount, d.footage ? d.footage.length : "?"));
+        lines.push("Comps:        " + numOr(d.numComps, "?"));
+        lines.push("Layers:       " + numOr(d.numLayers, "?"));
+        lines.push("Expressions:  " + numOr(d.numExpressions, "?"));
+        lines.push("Effects:      " + numOr(d.numEffects, "?"));
+        lines.push("Fonts:        " + numOr(d.numFonts, arrLen(d.fonts) || "?"));
+        lines.push("Footage:      " + numOr(d.numFootage, "?"));
         lines.push("Missing:      " + missing);
+        lines.push("Unlinked:     " + unlinked);
+
+        if (missing > 0 && missingArr) {
+            lines.push("");
+            lines.push("--- Missing footage ---");
+            var mi, maxM = Math.min(missingArr.length, 15);
+            for (mi = 0; mi < maxM; mi++) {
+                lines.push("• " + missingArr[mi]);
+            }
+            if (missingArr.length > maxM) {
+                lines.push("… +" + (missingArr.length - maxM) + " more");
+            }
+        }
 
         if (d.compsTruncated || d.footageTruncated) {
             lines.push("");
@@ -167,8 +210,8 @@
 
         lines.push("");
         lines.push("--- Expression lint ---");
-        if (lint && lint.ok) {
-            lines.push(summarizeLint(lint.data));
+        if (lintData) {
+            lines.push(summarizeLint(lintData));
         } else if (lint && lint.error) {
             lines.push("Lint error: " + lint.error.message);
         } else {

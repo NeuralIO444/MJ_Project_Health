@@ -39,3 +39,11 @@ Run on a limited macOS with AE 2024+ and MographJailed installed via the designe
 
 Record AE version, macOS version, and approximate `.aep` size for any failure.  
 If `ingest.data` field names differ from the script’s expectations on a newer CLI, capture the raw JSON envelope and adjust the report section.
+
+## Response shape regression (Issue 002)
+
+- [ ] Report shows numeric comps/layers/expressions (not `?`) against real ingest
+- [ ] Missing count equals `footageMissing.length`; names listed
+- [ ] Status BLOCKERS when missing footage or lint errors > 0
+- [ ] Status WARNINGS when only lint warnings or unlinked footage
+- [ ] Lint section shows severity + code + message from `findings[]`

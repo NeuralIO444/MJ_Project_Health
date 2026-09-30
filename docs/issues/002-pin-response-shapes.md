@@ -64,10 +64,10 @@ Real lint keys: `findings[]` with `{ code, severity, comp, layer, propertyPath, 
 
 ## Implementation checklist
 
-- [ ] `ae/MJ_Project_Health.jsx` uses only documented keys from RESPONSE_SHAPES.md
-- [ ] Remove fallbacks for `compCount`, `issues`, `problems`, `missingFootageCount`
-- [ ] Status uses `footageMissing` / `footageUnlinked` / lint `errors` / `warnings`
-- [ ] Truncation notes use `compsTruncated`, `footageTruncated`, `findingsTruncated`
+- [x] `ae/MJ_Project_Health.jsx` uses only documented keys from RESPONSE_SHAPES.md
+- [x] Remove fallbacks for `compCount`, `issues`, `problems`, `missingFootageCount`
+- [x] Status uses `footageMissing` / `footageUnlinked` / lint `errors` / `warnings`
+- [x] Truncation notes use `compsTruncated`, `footageTruncated`, `findingsTruncated`
 - [ ] Fixtures committed under `docs/fixtures/`
 - [ ] TEST_CHECKLIST updated
 - [ ] Manual smoke: designer-install CLI + real scrape still produces non-`?` counts
