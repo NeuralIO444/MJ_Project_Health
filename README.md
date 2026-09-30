@@ -29,6 +29,29 @@ Optimized for typical **100–400 MB** `.aep` projects (scraper bounds already f
 
 ---
 
+
+## CLI (mj-observe)
+
+Stock zsh entry point (AE + C4D receipts, offline HTML dashboard, snapshots).
+
+```zsh
+chmod +x tools/mj-observe.zsh tools/mj-snapshot.zsh
+./tools/mj-observe.zsh help
+./tools/mj-observe.zsh describe
+./tools/mj-observe.zsh report \
+  --ingest docs/fixtures/sample-ingest.MJ_PROJECT_SUMMARY_1.json \
+  --lint docs/fixtures/sample-lint.MJ_EXPRESSION_LINT_1.json \
+  --c4d docs/fixtures/sample-c4d.MJ_C4D_SCRAPE_1.json \
+  --out /tmp/mj-out
+open /tmp/mj-out/mj-health-report.html
+./tools/mj-observe.zsh snapshot /path/to/shot.aep
+```
+
+Full manuals:
+
+- [docs/man/mj-observe.1.md](docs/man/mj-observe.1.md)
+- [docs/man/mj-snapshot.1.md](docs/man/mj-snapshot.1.md)
+
 ## Requirements
 
 - macOS with stock `/bin/zsh` (no admin rights needed)

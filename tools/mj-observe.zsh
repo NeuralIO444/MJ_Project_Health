@@ -17,17 +17,43 @@ usage() {
   cat <<EOF
 mj-observe ${MJ_OBSERVE_VERSION} — MographJailed Observer (stock zsh)
 
-Usage:
-  mj-observe help
-  mj-observe describe [--json]
-  mj-observe report [--ingest <AE summary>] [--lint <lint>] [--c4d <C4D scrape>] [--out <dir>]
-  mj-observe diff <old.json> <new.json>
-  mj-observe pack <shot-dir> [--out <dir>]
-  mj-observe shot <shot-dir>
-  mj-observe snapshot <file.aep|file.c4d> [--out <versions-dir>]
+USAGE
+  mj-observe <command> [options]
 
-Rules: read-only Observer; no source mutation; Sequoia stock baseline.
-AE + C4D receipts supported. Dashboard is offline HTML.
+COMMANDS
+  help              Show this help
+  describe          Probe stock tools, c4dpy, MographJailed CLI
+                    [--json]   reserved machine-readable form
+  report            Build offline HTML dashboard + HEALTH.txt
+                    --ingest <AE MJ_PROJECT_SUMMARY_1.json>
+                    --lint   <AE MJ_EXPRESSION_LINT_1.json>
+                    --c4d    <MJ_C4D_SCRAPE_1.json>
+                    --out    <dir>   (default: .)
+                    Need at least --ingest or --c4d
+  diff              Compare two summary/scrape JSON files
+                    mj-observe diff <old.json> <new.json>
+  pack              Hand-off tarball (receipts, report, snapshots, MACHINE.txt)
+                    mj-observe pack <shot-dir> [--out <dir>]
+  shot              Discover .aep/.c4d, describe, report from mj-receipts/
+                    mj-observe shot <shot-dir>
+  snapshot          Non-overwrite hash snapshot (.aep|.c4d)
+                    mj-observe snapshot <file> [--out <versions-dir>]
+
+STATUS
+  PASS       no missing assets/footage, no lint errors
+  WARNINGS   lint warnings and/or unlinked AE footage
+  BLOCKERS   missing AE footage / C4D assets and/or lint errors
+
+EXAMPLES
+  mj-observe describe
+  mj-observe report --ingest sum.json --lint lint.json --c4d c4d.json --out /tmp/out
+  open /tmp/out/mj-health-report.html
+  mj-observe shot ~/Shots/SH010
+  mj-observe snapshot ~/Shots/SH010/SH010.aep
+
+RULES
+  Read-only Observer. No source mutation. Stock Sequoia baseline (no Homebrew).
+  Full manual: docs/man/mj-observe.1.md
 EOF
 }
 

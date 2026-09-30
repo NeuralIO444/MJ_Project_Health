@@ -10,14 +10,31 @@ usage() {
   cat <<USAGE
 mj-snapshot — non-overwrite project snapshot (Observer)
 
-Usage:
+USAGE
   mj-snapshot <file.aep|file.c4d> [--out <versions-dir>]
+  mj-observe snapshot <file.aep|file.c4d> [--out <versions-dir>]
 
-Creates a copy named:
-  <basename>-<timestamp>-<sha12><ext>
+DESCRIPTION
+  Copy a project file to a versions directory. Never modifies the source.
+  Output name: <basename>-<YYYYMMDD-HHMMSS>-<sha256_12>.<ext>
+  Default --out: <parent>/mj-versions
 
-Skips if an identical hash snapshot already exists in the out dir (hash-skip).
-Requires: shasum or openssl, cp. Optional: cp -c for APFS clone when available.
+  Hash-skip: if a file with the same content hash already exists in --out,
+  print SKIP and exit 0 (no second copy).
+
+OPTIONS
+  --out DIR   Versions directory (created if missing)
+  -h, --help  This help
+
+REQUIRES
+  shasum or openssl; cp. Prefers APFS clone (cp -c) when available.
+
+EXAMPLES
+  mj-snapshot ~/Shots/SH010/SH010.aep
+  mj-snapshot ~/Shots/SH010/SH010.c4d --out ~/Versions/SH010
+
+MANUAL
+  docs/man/mj-snapshot.1.md
 USAGE
 }
 
