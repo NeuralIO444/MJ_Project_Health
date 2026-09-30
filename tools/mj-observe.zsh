@@ -12,27 +12,81 @@ setopt err_return extended_glob null_glob warn_create_global
 unsetopt nounset
 
 # --- fixed stock adapters ---------------------------------------------------
-typeset _BIN_CP="/bin/cp"
-typeset _BIN_MKDIR="/bin/mkdir"
-typeset _BIN_DATE="/bin/date"
-typeset _BIN_DF="/bin/df"
-typeset _USR_GREP="/usr/bin/grep"
-typeset _USR_TAR="/usr/bin/tar"
-typeset _USR_SW_VERS="/usr/bin/sw_vers"
-typeset _USR_PYTHON="/usr/bin/python3"
-typeset _USR_OPEN="/usr/bin/open"
-[[ -x /bin/cp ]] || _BIN_CP="cp"
-[[ -x /bin/mkdir ]] || _BIN_MKDIR="mkdir"
-[[ -x /bin/date ]] || _BIN_DATE="date"
-[[ -x /bin/df ]] || _BIN_DF="df"
-[[ -x /usr/bin/python3 ]] || _USR_PYTHON="python3"
-[[ -x /usr/bin/tar ]] || _USR_TAR="tar"
+# Fail-closed absolute adapters (F5)
+typeset -r _BIN_CP="/bin/cp"
+typeset -r _BIN_MKDIR="/bin/mkdir"
+typeset -r _BIN_DATE="/bin/date"
+typeset -r _BIN_DF="/bin/df"
+typeset -r _USR_GREP="/usr/bin/grep"
+typeset -r _USR_TAR="/usr/bin/tar"
+typeset -r _USR_SW_VERS="/usr/bin/sw_vers"
+typeset -r _USR_PYTHON="/usr/bin/python3"
+typeset -r _USR_OPEN="/usr/bin/open"
+
+require_core_adapters() {
+  local miss=0
+  for p in ${_BIN_CP} ${_BIN_MKDIR} ${_BIN_DATE} ${_BIN_DF} ${_USR_GREP}; do
+    [[ -x $p ]] || { print -u2 "mj-observe: missing required adapter: $p"; miss=1; }
+  done
+  (( miss == 0 )) || return 1
+  return 0
+}
 # ---------------------------------------------------------------------------
 
-MJ_OBSERVE_VERSION="0.2.1-dev"
+MJ_OBSERVE_VERSION="0.2.2-dev"
 SCRIPT_DIR="${0:A:h}"
 ROOT_DIR="${SCRIPT_DIR:h}"
 TEMPLATE="${ROOT_DIR}/web/dashboard_template.html"
+
+
+# --- path helpers (F1 jail, F2 non-clobber) ---------------------------------
+# Return 0 if $1 resolves under $2 (both absolute after :A)
+path_under() {
+  local child="${1:A}"
+  local parent="${2:A}"
+  [[ -n "$child" && -n "$parent" ]] || return 1
+  [[ "$child" == "$parent" || "$child" == "$parent"/* ]]
+}
+
+# Resolve --out; if jail root set, require out under jail
+resolve_outdir() {
+  local out="$1"
+  local jail="$2"
+  if [[ -z "$out" ]]; then
+    out="."
+  fi
+  out="${out:A}"
+  if [[ -n "$jail" ]]; then
+    jail="${jail:A}"
+    if ! path_under "$out" "$jail"; then
+      print -u2 "mj-observe: --out must be under jail: $jail (got $out)"
+      return 1
+    fi
+  fi
+  print -r -- "$out"
+}
+
+# Unique report paths under outdir (F2: do not clobber without --force)
+report_paths() {
+  local outdir="$1"
+  local force="$2"
+  local stamp
+  stamp="$(${_BIN_DATE} +%Y%m%d-%H%M%S 2>/dev/null)" || stamp="unknown"
+  local html="${outdir}/mj-health-report.html"
+  local txt="${outdir}/HEALTH.txt"
+  if [[ "$force" == "1" ]]; then
+    print -r -- "$html"
+    print -r -- "$txt"
+    return 0
+  fi
+  if [[ -e "$html" || -e "$txt" ]]; then
+    html="${outdir}/mj-health-report-${stamp}-$$.html"
+    txt="${outdir}/HEALTH-${stamp}-$$.txt"
+  fi
+  print -r -- "$html"
+  print -r -- "$txt"
+}
+
 
 usage() {
   cat <<EOF
@@ -49,14 +103,16 @@ COMMANDS
                     --ingest <AE MJ_PROJECT_SUMMARY_1.json>
                     --lint   <AE MJ_EXPRESSION_LINT_1.json>
                     --c4d    <MJ_C4D_SCRAPE_1.json>
-                    --out    <dir>   (default: .)
+                    --out    <dir>     (default: .)
+                    --jail   <dir>     F1: --out must stay under this root
+                    --force            F2: allow overwrite of report names
                     Need at least --ingest or --c4d
   diff              Compare two summary/scrape JSON files
                     mj-observe diff <old.json> <new.json>
   pack              Hand-off tarball (receipts, report, snapshots, MACHINE.txt)
-                    mj-observe pack <shot-dir> [--out <dir>]
+                    mj-observe pack <shot-dir> [--out <dir>] [--jail <dir>]
   shot              Discover .aep/.c4d, describe, report from mj-receipts/
-                    mj-observe shot <shot-dir>
+                    mj-observe shot <shot-dir>   (implies --jail <shot-dir>)
   snapshot          Non-overwrite hash snapshot (.aep|.c4d)
                     mj-observe snapshot <file> [--out <versions-dir>]
 
@@ -80,11 +136,11 @@ EOF
 }
 
 have() {
-  # Prefer absolute stock paths when probing known tools
   case "$1" in
-    python3) [[ -x ${_USR_PYTHON} ]] && return 0 ;;
-    tar)     [[ -x ${_USR_TAR} ]] && return 0 ;;
-    open)    [[ -x ${_USR_OPEN} ]] && return 0 ;;
+    python3) [[ -x ${_USR_PYTHON} ]] && return 0; return 1 ;;
+    tar)     [[ -x ${_USR_TAR} ]] && return 0; return 1 ;;
+    open)    [[ -x ${_USR_OPEN} ]] && return 0; return 1 ;;
+    grep)    [[ -x ${_USR_GREP} ]] && return 0; return 1 ;;
   esac
   command -v "$1" >/dev/null 2>&1
 }
@@ -143,13 +199,16 @@ cmd_describe() {
 }
 
 cmd_report() {
-  local ingest="" lint="" c4d="" outdir="."
+  require_core_adapters || return 1
+  local ingest="" lint="" c4d="" outdir="." jail="" force=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --ingest) ingest="$2"; shift 2 ;;
       --lint) lint="$2"; shift 2 ;;
       --c4d) c4d="$2"; shift 2 ;;
       --out) outdir="$2"; shift 2 ;;
+      --jail) jail="$2"; shift 2 ;;
+      --force) force=1; shift ;;
       *) print -u2 "Unknown arg: $1"; return 1 ;;
     esac
   done
@@ -160,15 +219,23 @@ cmd_report() {
   [[ -n "$ingest" && ! -f "$ingest" ]] && { print -u2 "missing ingest: $ingest"; return 1; }
   [[ -n "$c4d" && ! -f "$c4d" ]] && { print -u2 "missing c4d: $c4d"; return 1; }
   [[ -n "$lint" && ! -f "$lint" ]] && { print -u2 "missing lint: $lint"; return 1; }
-  ${_BIN_MKDIR} -p "$outdir"
-  local outfile="${outdir}/mj-health-report.html"
+  outdir="$(resolve_outdir "$outdir" "$jail")" || return 1
+  ${_BIN_MKDIR} -p "$outdir" || return 1
+  local outfile healthfile
+  local -a _rp
+  _rp=("${(@f)$(report_paths "$outdir" "$force")}")
+  outfile="${_rp[1]}"
+  healthfile="${_rp[2]}"
   if [[ ! -f "$TEMPLATE" ]]; then
     print -u2 "Missing template: $TEMPLATE"
     return 1
   fi
+  if [[ ! -x ${_USR_PYTHON} ]]; then
+    print -u2 "mj-observe: report requires ${_USR_PYTHON}"
+    return 1
+  fi
 
-  if have python3; then
-    INGEST="${ingest:-}" LINT="${lint:-}" C4D="${c4d:-}" TEMPLATE="$TEMPLATE" OUTFILE="$outfile" ${_USR_PYTHON} - <<'PY'
+  INGEST="${ingest:-}" LINT="${lint:-}" C4D="${c4d:-}" TEMPLATE="$TEMPLATE" OUTFILE="$outfile" ${_USR_PYTHON} - <<'PY'
 import json, os, re, datetime
 ingest_path = os.environ.get("INGEST") or ""
 lint_path = os.environ.get("LINT") or ""
@@ -254,10 +321,6 @@ print("status=" + status)
 if c4d:
     print("c4d_missing=%s" % c4d.get("numMissing"))
 PY
-  else
-    cp "$TEMPLATE" "$outfile"
-    print "$outfile (template only; python3 needed to inject data)"
-  fi
 
   {
     print "MJ Shot Health"
@@ -265,8 +328,8 @@ PY
     [[ -n "$lint" ]] && print "lint=$lint"
     [[ -n "$c4d" ]] && print "c4d=$c4d"
     print "report=$outfile"
-  } > "${outdir}/HEALTH.txt"
-  print "Wrote ${outdir}/HEALTH.txt"
+  } > "$healthfile"
+  print "Wrote $healthfile"
 }
 
 cmd_diff() {
@@ -299,21 +362,26 @@ PY
 }
 
 cmd_pack() {
+  require_core_adapters || return 1
   local shot="${1:-}"
-  local outdir=""
+  local outdir="" jail=""
   shift 2>/dev/null || true
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --out) outdir="$2"; shift 2 ;;
+      --jail) jail="$2"; shift 2 ;;
       *) shift ;;
     esac
   done
   if [[ -z "$shot" || ! -d "$shot" ]]; then
-    print -u2 "usage: mj-observe pack <shot-dir> [--out <dir>]"
+    print -u2 "usage: mj-observe pack <shot-dir> [--out <dir>] [--jail <dir>]"
     return 1
   fi
+  shot="${shot:A}"
+  jail="${jail:-$shot}"
   outdir="${outdir:-$shot}"
-  ${_BIN_MKDIR} -p "$outdir"
+  outdir="$(resolve_outdir "$outdir" "$jail")" || return 1
+  ${_BIN_MKDIR} -p "$outdir" || return 1
   local stamp
   stamp="$(${_BIN_DATE} +%Y%m%d-%H%M%S 2>/dev/null)" || stamp="unknown"
   local name="${shot:t}"
@@ -337,8 +405,10 @@ cmd_pack() {
   done
   [[ -f "$shot/HEALTH.txt" ]] && cp "$shot/HEALTH.txt" "$stage/"
   [[ -f "$shot/mj-health-report.html" ]] && cp "$shot/mj-health-report.html" "$stage/"
-  if have tar; then
+  if [[ -x ${_USR_TAR} ]]; then
     local tarball="${outdir}/mj-handoff-${name}-${stamp}.tar.gz"
+    # F4: pack duplicates data by design; warn if stage looks large
+    print "mj-observe pack: staging copies under $stage (disk use = sum of receipts/snapshots)"
     ${_USR_TAR} -czf "$tarball" -C "$outdir" "mj-handoff-${name}-${stamp}"
     print "Wrote $tarball"
   else
@@ -347,6 +417,7 @@ cmd_pack() {
 }
 
 cmd_shot() {
+  require_core_adapters || return 1
   local shot="${1:-}"
   if [[ -z "$shot" || ! -d "$shot" ]]; then
     print -u2 "usage: mj-observe shot <shot-dir>"
@@ -382,7 +453,8 @@ cmd_shot() {
     [[ -n "$lint_f" ]] && report_args+=(--lint "$lint_f")
     [[ -n "$c4d_f" ]] && report_args+=(--c4d "$c4d_f")
     if (( ${#report_args} )); then
-      cmd_report "${report_args[@]}" --out "$shot"
+      # F1: jail reports under the shot directory
+      cmd_report "${report_args[@]}" --out "$shot" --jail "$shot"
     else
       print "  (receipts present but no known summary schema)"
     fi

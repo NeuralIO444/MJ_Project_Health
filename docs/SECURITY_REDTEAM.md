@@ -225,3 +225,15 @@ If any of these become false, treat as a **security regression**:
 ---
 
 *Auditable snapshot of design intent for Observer shell tools. Re-run the test plan after any change that adds writes, subprocesses, or path handling.*
+
+## 9. Remediation status (0.2.2-dev)
+
+| ID | Status | Implementation |
+|----|--------|----------------|
+| F1 | Mitigated | `--jail`; `shot`/`pack` default jail to shot directory |
+| F2 | Mitigated | Timestamped report names unless `--force` |
+| F3 | Mitigated | Snapshot filename includes process id |
+| F4 | Tracked | Explicit pack disk-use message; no auto-purge |
+| F5 | Mitigated | Fail-closed `/bin` and `/usr/bin` adapters only |
+
+Industry mapping: [ENTERTAINMENT_SECURITY.md](ENTERTAINMENT_SECURITY.md).

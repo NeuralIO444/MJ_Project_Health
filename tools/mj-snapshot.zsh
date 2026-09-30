@@ -11,15 +11,27 @@ setopt err_return extended_glob null_glob warn_create_global
 unsetopt nounset  # optional flags may be empty
 
 # --- fixed stock adapters (do not rely on PATH) -----------------------------
-typeset _BIN_CP="/bin/cp"
-typeset _BIN_MKDIR="/bin/mkdir"
-typeset _BIN_DATE="/bin/date"
-typeset _USR_SHASUM="/usr/bin/shasum"
-typeset _USR_OPENSSL="/usr/bin/openssl"
-typeset _USR_AWK="/usr/bin/awk"
-[[ -x /bin/cp ]] || _BIN_CP="cp"
-[[ -x /bin/mkdir ]] || _BIN_MKDIR="mkdir"
-[[ -x /bin/date ]] || _BIN_DATE="date"
+# Fail-closed: absolute stock paths only (F5). No PATH fallback.
+typeset -r _BIN_CP="/bin/cp"
+typeset -r _BIN_MKDIR="/bin/mkdir"
+typeset -r _BIN_DATE="/bin/date"
+typeset -r _USR_SHASUM="/usr/bin/shasum"
+typeset -r _USR_OPENSSL="/usr/bin/openssl"
+typeset -r _USR_AWK="/usr/bin/awk"
+
+require_adapters() {
+  local miss=0
+  [[ -x ${_BIN_CP} ]] || { print -u2 "mj-snapshot: missing ${_BIN_CP}"; miss=1; }
+  [[ -x ${_BIN_MKDIR} ]] || { print -u2 "mj-snapshot: missing ${_BIN_MKDIR}"; miss=1; }
+  [[ -x ${_BIN_DATE} ]] || { print -u2 "mj-snapshot: missing ${_BIN_DATE}"; miss=1; }
+  [[ -x ${_USR_AWK} ]] || { print -u2 "mj-snapshot: missing ${_USR_AWK}"; miss=1; }
+  if [[ ! -x ${_USR_SHASUM} && ! -x ${_USR_OPENSSL} ]]; then
+    print -u2 "mj-snapshot: need ${_USR_SHASUM} or ${_USR_OPENSSL}"
+    miss=1
+  fi
+  (( miss == 0 )) || return 1
+  return 0
+}
 # ---------------------------------------------------------------------------
 
 usage() {
@@ -74,6 +86,7 @@ hash_file() {
 }
 
 main() {
+  require_adapters || return 1
   local src="" outdir=""
   while (( $# > 0 )); do
     case "$1" in
@@ -154,6 +167,8 @@ main() {
 
   local stamp base ext dest
   stamp="$(${_BIN_DATE} +%Y%m%d-%H%M%S 2>/dev/null)" || stamp="unknown"
+  # F3: pid suffix reduces same-second collision between concurrent runs
+  stamp="${stamp}-$$"
   base="${src:t:r}"
   ext="${src:e}"
   dest="${outdir}/${base}-${stamp}-${short}.${ext}"
